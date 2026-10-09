@@ -1,0 +1,46 @@
+# Publishes the site to GitHub Pages and releases the day's pins into the RSS feeds.
+# Runs on every push and once a day. The daily run commits the updated feeds, which also keeps
+# the repository active: GitHub turns off scheduled workflows after 60 days without activity.
+name: pages
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 16 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Release due pins into the feeds
+        run: python3 release_feeds.py
+      - name: Commit feeds if they changed
+        run: |
+          if [ -n "$(git status --porcelain feeds)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add feeds
+            git commit -m "Release pins $(date -u +%F)"
+            git push
+          fi
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+      - id: deployment
+        uses: actions/deploy-pages@v4
